@@ -177,8 +177,8 @@
     "cash_desc": "Pay in cash upon arrival · VND accepted"
   },
   "confirmation": {
-    "title": "Booking Request Sent!",
-    "subtitle": "Thank you for choosing Hoang Long Homestay",
+    "title": "You've successfully booked a room at Hoang Long Homestay!",
+    "subtitle": "Thank you for choosing us. We will contact you shortly to confirm.",
     "reference_label": "Your Booking Reference",
     "message": "We will contact you within 2 hours to confirm your reservation",
     "details_title": "Booking Summary",

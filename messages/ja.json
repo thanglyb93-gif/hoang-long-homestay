@@ -177,8 +177,8 @@
     "cash_desc": "チェックイン時に現地にて現金でお支払い · VND 対応"
   },
   "confirmation": {
-    "title": "予約リクエストを送信しました！",
-    "subtitle": "ホアンロン ホームステイをお選びいただきありがとうございます",
+    "title": "Hoang Long Homestayのご予約が完了しました！",
+"subtitle": "ご利用ありがとうございます。まもなくご予約の確認のためご連絡いたします。",
     "reference_label": "予約番号",
     "message": "2時間以内にご連絡し、ご予約を確認いたします",
     "details_title": "予約サマリー",

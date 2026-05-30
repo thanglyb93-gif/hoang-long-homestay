@@ -177,8 +177,8 @@
     "cash_desc": "到店后以现金支付 · 支持越南盾"
   },
   "confirmation": {
-    "title": "预订请求已发送！",
-    "subtitle": "感谢您选择皇龙民宿",
+    "title": "您已成功在皇龙民宿预订房间！",
+"subtitle": "感谢您的选择，我们将尽快与您联系确认预订。",
     "reference_label": "您的预订编号",
     "message": "我们将在2小时内与您联系确认预订",
     "details_title": "预订摘要",

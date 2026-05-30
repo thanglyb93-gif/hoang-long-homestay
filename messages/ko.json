@@ -177,8 +177,8 @@
     "cash_desc": "체크인 시 현장에서 현금 결제 · VND 가능"
   },
   "confirmation": {
-    "title": "예약 요청이 전송되었습니다!",
-    "subtitle": "황룡 홈스테이를 선택해 주셔서 감사합니다",
+    "title": "Hoang Long Homestay 객실 예약이 완료되었습니다!",
+"subtitle": "선택해 주셔서 감사합니다. 곧 예약 확인을 위해 연락드리겠습니다.",
     "reference_label": "예약 번호",
     "message": "2시간 이내에 연락하여 예약을 확인해 드리겠습니다",
     "details_title": "예약 요약",
