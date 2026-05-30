@@ -118,7 +118,7 @@ export const usePricingStore = create<PricingState>()(
         const { data, error } = await supabase.from('pricing').select('*').eq('id', 'main').single();
         if (error || !data) return;
         set({
-          prices:                   data.prices                     ?? DEFAULT_PRICES,
+          prices: { delta101: data.prices?.delta101 ?? 450000, gamma201: data.prices?.gamma201 ?? 550000, alpha202: data.prices?.alpha202 ?? 650000, beta301: data.prices?.beta301 ?? 650000 },
           baseInputPrice:           data.base_input_price           ?? null,
           gammaMultiplier:          data.gamma_multiplier           ?? 1.25,
           premiumMultiplier:        data.premium_multiplier         ?? 1.50,
