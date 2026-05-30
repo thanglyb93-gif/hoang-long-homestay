@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 165" fill="#1B2855" role="img" aria-label="Hoang Long Homestay logo mark">
+  <!-- H left stem (full height) -->
+  <rect x="10"  y="10"  width="40" height="115"/>
+  <!-- H / L shared center bar (upper portion) -->
+  <rect x="90"  y="10"  width="40" height="70"/>
+  <!-- H outer-right bar (upper portion) -->
+  <rect x="168" y="10"  width="42" height="70"/>
+  <!-- H crossbar -->
+  <rect x="50"  y="50"  width="80" height="26"/>
+  <!-- L foot (extends from center bar rightward) -->
+  <rect x="90"  y="113" width="120" height="40"/>
+</svg>
