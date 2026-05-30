@@ -149,7 +149,6 @@ export default async function HomePage() {
               <div className="w-10 h-px bg-sky-400/50" />
             </div>
           </div>
-
           <HomeRoomsPreview />
       </section>
 
