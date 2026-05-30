@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { Cormorant_Garamond, Be_Vietnam_Pro, Noto_Sans_SC, Noto_Sans_JP, Noto_Sans_KR } from 'next/font/google';
 import WhatsAppButton from '@/components/WhatsAppButton';
+import SettingsLoader from '@/components/SettingsLoader';
 import '../globals.css';
 
 const locales = ['vi', 'en', 'zh', 'ko', 'ja'];
@@ -171,6 +172,7 @@ export default async function LocaleLayout({
           <div className="page-transition">
             {children}
           </div>
+          <SettingsLoader />
           <WhatsAppButton />
         </NextIntlClientProvider>
       </body>
