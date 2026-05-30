@@ -1,47 +1,59 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, CalendarOff, CheckCircle2, AlertCircle, BedDouble } from 'lucide-react';
+import { Plus, Trash2, CalendarOff, BedDouble } from 'lucide-react';
 import { useAdminStore } from '@/lib/admin-store';
-import { usePricingStore } from '@/lib/pricing-store';
-
-const ROOMS = [
-  { id: 'green-mountain', name: 'Delta',   number: '101', tier: 'Standard Double', priceKey: 'delta101'  as const, isPlaceholder: false },
-  { id: 'ban-flower',    name: 'Gamma',   number: '201', tier: 'Superior Double', priceKey: 'gamma201'  as const, isPlaceholder: false },
-  { id: 'family-room',   name: 'Alpha',   number: '202', tier: 'Deluxe Double',   priceKey: 'alpha202'  as const, isPlaceholder: false },
-  { id: 'deluxe',        name: 'Beta',    number: '301', tier: 'Deluxe Double',   priceKey: 'beta301'   as const, isPlaceholder: false },
-  { id: 'epsilon',       name: 'Epsilon', number: '102', tier: 'Standard Double', priceKey: 'delta101'  as const, isPlaceholder: true  },
-  { id: 'zeta',          name: 'Zeta',    number: '203', tier: 'Superior Double', priceKey: 'gamma201'  as const, isPlaceholder: true  },
-  { id: 'eta',           name: 'Eta',     number: '302', tier: 'Deluxe Double',   priceKey: 'alpha202'  as const, isPlaceholder: true  },
-  { id: 'theta',         name: 'Theta',   number: '303', tier: 'Deluxe Double',   priceKey: 'beta301'   as const, isPlaceholder: true  },
-];
+import { usePricingStore, ROOM_PRICE_KEY } from '@/lib/pricing-store';
+import { useAllRooms, useRoomStore } from '@/lib/room-store';
 
 export default function RoomsPanel() {
-  const { blockedDates, blockDate, unblockDate } = useAdminStore();
+  const { overrides: roomOverrides } = useRoomStore();
+  const { getRoomOverride, addManualBlock, removeManualBlock } = useAdminStore();
   const { prices } = usePricingStore();
+  const allRooms = useAllRooms();
+
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
-  const [dateInput, setDateInput] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [blockNote, setBlockNote] = useState('');
   const [activeTab, setActiveTab] = useState<'active' | 'placeholder'>('active');
 
-  const activeRooms = ROOMS.filter(r => !r.isPlaceholder);
-  const placeholderRooms = ROOMS.filter(r => r.isPlaceholder);
+  const activeRooms = allRooms.filter((r) => {
+    const o = roomOverrides[r.id];
+    if (r.isPlaceholder) return o?.isActive === true;
+    return o?.isActive !== false;
+  });
+
+  const placeholderRooms = allRooms.filter((r) => {
+    const o = roomOverrides[r.id];
+    if (!r.isPlaceholder) return false;
+    return o?.isActive !== true;
+  });
+
   const displayRooms = activeTab === 'active' ? activeRooms : placeholderRooms;
 
   const handleBlock = () => {
-    if (!selectedRoom || !dateInput) return;
-    blockDate(selectedRoom, dateInput);
-    setDateInput('');
+    if (!selectedRoom || !startDate || !endDate) return;
+    addManualBlock(selectedRoom, { start: startDate, end: endDate, note: blockNote });
+    setStartDate('');
+    setEndDate('');
+    setBlockNote('');
   };
 
-  const getBlockedForRoom = (roomId: string) => {
-    return (blockedDates && blockedDates[roomId]) ? blockedDates[roomId] : [];
+  const getBlocksForRoom = (roomId: string) => {
+    return getRoomOverride(roomId).manualBlocks ?? [];
+  };
+
+  const formatDateRange = (start: string, end: string) => {
+    if (start === end) return start;
+    return `${start} → ${end}`;
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-white mb-1">Room Management</h2>
-        <p className="text-gray-400 text-sm">Block dates and manage room availability</p>
+        <p className="text-gray-400 text-sm">Block date ranges and manage room availability</p>
       </div>
 
       {/* Tabs */}
@@ -70,9 +82,10 @@ export default function RoomsPanel() {
 
       {/* Room Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {displayRooms.map(room => {
-          const blocked = getBlockedForRoom(room.id);
-          const price = prices[room.priceKey];
+        {displayRooms.map((room) => {
+          const blocks = getBlocksForRoom(room.id);
+          const priceKey = ROOM_PRICE_KEY[room.id];
+          const price = priceKey ? prices[priceKey] : null;
           const isSelected = selectedRoom === room.id;
 
           return (
@@ -88,36 +101,55 @@ export default function RoomsPanel() {
                   <BedDouble className="w-5 h-5 text-blue-400" />
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-white font-semibold">{room.name} · Room {room.number}</h3>
+                      <h3 className="text-white font-semibold">
+                        {room.nameEn} · Room {room.roomNumber}
+                      </h3>
                       {room.isPlaceholder && (
                         <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">
                           Placeholder
                         </span>
                       )}
                     </div>
-                    <p className="text-gray-400 text-sm">{room.tier}</p>
+                    <p className="text-gray-400 text-sm">{room.type}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-white font-medium">{price ? `$${price}/night` : '—'}</p>
-                  {blocked.length > 0 && (
-                    <p className="text-orange-400 text-xs">{blocked.length} date{blocked.length > 1 ? 's' : ''} blocked</p>
+                  <p className="text-white font-medium">
+                    {price ? `${price.toLocaleString()} ₫/night` : '—'}
+                  </p>
+                  {blocks.length > 0 && (
+                    <p className="text-orange-400 text-xs">
+                      {blocks.length} block{blocks.length > 1 ? 's' : ''}
+                    </p>
                   )}
                 </div>
               </div>
 
-              {/* Blocked dates list */}
-              {blocked.length > 0 && (
+              {/* Blocked ranges list */}
+              {blocks.length > 0 && (
                 <div className="mt-2 space-y-1">
-                  {blocked.map(date => (
-                    <div key={date} className="flex items-center justify-between bg-gray-700/50 rounded-lg px-3 py-1.5">
+                  {blocks.map((block) => (
+                    <div
+                      key={block.id}
+                      className="flex items-center justify-between bg-gray-700/50 rounded-lg px-3 py-1.5"
+                    >
                       <div className="flex items-center gap-2">
-                        <CalendarOff className="w-3.5 h-3.5 text-orange-400" />
-                        <span className="text-gray-300 text-sm">{date}</span>
+                        <CalendarOff className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+                        <div>
+                          <span className="text-gray-300 text-sm">
+                            {formatDateRange(block.start, block.end)}
+                          </span>
+                          {block.note && (
+                            <p className="text-gray-500 text-xs">{block.note}</p>
+                          )}
+                        </div>
                       </div>
                       <button
-                        onClick={e => { e.stopPropagation(); unblockDate(room.id, date); }}
-                        className="text-red-400 hover:text-red-300 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeManualBlock(room.id, block.id);
+                        }}
+                        className="text-red-400 hover:text-red-300 transition-colors flex-shrink-0"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -126,28 +158,66 @@ export default function RoomsPanel() {
                 </div>
               )}
 
-              {/* Date block input */}
+              {/* Date range block input */}
               {isSelected && (
-                <div className="mt-3 flex gap-2" onClick={e => e.stopPropagation()}>
+                <div
+                  className="mt-3 space-y-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-gray-400 text-xs mb-1 block">From</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          if (!endDate || e.target.value > endDate) setEndDate(e.target.value);
+                        }}
+                        className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-400 text-xs mb-1 block">To</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        min={startDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
                   <input
-                    type="date"
-                    value={dateInput}
-                    onChange={e => setDateInput(e.target.value)}
-                    className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
+                    type="text"
+                    value={blockNote}
+                    onChange={(e) => setBlockNote(e.target.value)}
+                    placeholder="Note (optional, e.g. Maintenance)"
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
                   />
                   <button
                     onClick={handleBlock}
-                    disabled={!dateInput}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors"
+                    disabled={!startDate || !endDate}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
-                    Block
+                    Block Date Range
                   </button>
                 </div>
               )}
             </div>
           );
         })}
+
+        {displayRooms.length === 0 && (
+          <div className="col-span-2 bg-gray-800/50 rounded-xl p-8 text-center border border-gray-700">
+            <p className="text-gray-400 text-sm">
+              {activeTab === 'active'
+                ? 'No active rooms. Activate rooms in Room Info.'
+                : 'All placeholder rooms have been activated.'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

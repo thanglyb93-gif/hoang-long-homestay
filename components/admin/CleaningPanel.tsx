@@ -9,17 +9,15 @@ import {
 import { useAdminStore } from '@/lib/admin-store';
 import { useImageStore } from '@/lib/image-store';
 import { useCleaningStore, CLEANING_TASKS } from '@/lib/cleaning-store';
+import { useAllRooms, useRoomStore } from '@/lib/room-store';
 
-// ── Config ────────────────────────────────────────────────────────────────────
-
-const ROOMS = [
-  { id: 'green-mountain', name: 'Delta', number: '101', gradient: 'from-blue-900 to-slate-900' },
-  { id: 'ban-flower',     name: 'Gamma', number: '201', gradient: 'from-sky-200 to-indigo-100' },
-  { id: 'family-room',    name: 'Alpha', number: '202', gradient: 'from-blue-600 to-blue-900' },
-  { id: 'deluxe',         name: 'Beta',  number: '301', gradient: 'from-blue-400 to-indigo-700' },
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const GRADIENTS: Record<string, string> = {
+  'green-mountain': 'from-blue-900 to-slate-900',
+  'ban-flower':     'from-sky-200 to-indigo-100',
+  'family-room':    'from-blue-600 to-blue-900',
+  'deluxe':         'from-blue-400 to-indigo-700',
+};
+const DEFAULT_GRADIENT = 'from-slate-700 to-slate-900';
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function addDays(dateStr: string, n: number): string {
@@ -45,22 +43,20 @@ function getUrgency(checkOutDate: string | null): CleaningUrgency {
   if (!checkOutDate) return 'none';
   const today    = todayStr();
   const tomorrow = addDays(today, 1);
-  if (checkOutDate === today)    return 'today';
-  if (checkOutDate === tomorrow) return 'tomorrow';
-  if (checkOutDate <= addDays(today, 3)) return 'soon';
+  if (checkOutDate === today)              return 'today';
+  if (checkOutDate === tomorrow)           return 'tomorrow';
+  if (checkOutDate <= addDays(today, 3))   return 'soon';
   return 'none';
 }
 
 const URGENCY_STYLES: Record<CleaningUrgency, { bg: string; badge: string; text: string; icon: React.ElementType }> = {
-  today:    { bg: 'bg-red-900/30 border-red-700/50',    badge: 'bg-red-500 text-white',          text: 'text-red-300',    icon: AlertTriangle },
-  tomorrow: { bg: 'bg-amber-900/30 border-amber-700/50', badge: 'bg-amber-500 text-amber-950',   text: 'text-amber-300',  icon: Clock },
-  soon:     { bg: 'bg-blue-900/20 border-blue-700/30',  badge: 'bg-blue-700 text-blue-100',      text: 'text-blue-300',   icon: Clock },
-  none:     { bg: 'bg-[#111827] border-slate-700',       badge: 'bg-slate-700 text-slate-300',   text: 'text-slate-400',  icon: Sparkles },
+  today:    { bg: 'bg-red-900/30 border-red-700/50',     badge: 'bg-red-500 text-white',        text: 'text-red-300',   icon: AlertTriangle },
+  tomorrow: { bg: 'bg-amber-900/30 border-amber-700/50', badge: 'bg-amber-500 text-amber-950',  text: 'text-amber-300', icon: Clock },
+  soon:     { bg: 'bg-blue-900/20 border-blue-700/30',   badge: 'bg-blue-700 text-blue-100',    text: 'text-blue-300',  icon: Clock },
+  none:     { bg: 'bg-[#111827] border-slate-700',        badge: 'bg-slate-700 text-slate-300', text: 'text-slate-400', icon: Sparkles },
 };
 
-// ── Room Cleaning Card ────────────────────────────────────────────────────────
-
-function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
+function RoomCard({ room }: { room: { id: string; nameEn: string; roomNumber: string } }) {
   const today = todayStr();
   const { bookings } = useAdminStore();
   const { images }   = useImageStore();
@@ -70,7 +66,6 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
 
   const [expanded, setExpanded] = useState(false);
 
-  // Find the next confirmed checkout for this room
   const nextCheckout: string | null = useMemo(() => {
     const upcoming = bookings
       .filter((b) => b.roomId === room.id && b.status === 'confirmed' && b.checkOut >= today)
@@ -78,7 +73,6 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
     return upcoming[0]?.checkOut ?? null;
   }, [bookings, room.id, today]);
 
-  // Find guest name for that booking
   const nextGuest: string | null = useMemo(() => {
     if (!nextCheckout) return null;
     return bookings.find(
@@ -86,11 +80,11 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
     )?.fullName ?? null;
   }, [bookings, nextCheckout, room.id]);
 
-  const urgency = getUrgency(nextCheckout);
-  const style   = URGENCY_STYLES[urgency];
+  const urgency    = getUrgency(nextCheckout);
+  const style      = URGENCY_STYLES[urgency];
   const UrgencyIcon = style.icon;
+  const gradient   = GRADIENTS[room.id] ?? DEFAULT_GRADIENT;
 
-  // Cleaning record
   const record     = cleaningRooms[room.id];
   const statuses   = record?.taskStatuses ?? CLEANING_TASKS.map((t) => ({ taskId: t.id, done: false }));
   const doneCount  = statuses.filter((s) => s.done).length;
@@ -103,16 +97,15 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
 
   return (
     <div className={`rounded-2xl border overflow-hidden ${style.bg}`}>
-      {/* Header */}
-      <div className={`relative h-24 bg-gradient-to-br ${room.gradient} overflow-hidden flex-shrink-0`}>
+      <div className={`relative h-24 bg-gradient-to-br ${gradient} overflow-hidden flex-shrink-0`}>
         {heroImg && (
-          <Image src={heroImg} alt={room.name} fill className="object-cover opacity-50" sizes="400px" />
+          <Image src={heroImg} alt={room.nameEn} fill className="object-cover opacity-50" sizes="400px" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute inset-0 p-4 flex items-end justify-between">
           <div>
-            <p className="price-mono text-white/60 text-[10px] font-semibold tracking-widest uppercase">Room {room.number}</p>
-            <h3 className="price-mono text-white text-xl font-bold">{room.name}</h3>
+            <p className="price-mono text-white/60 text-[10px] font-semibold tracking-widest uppercase">Room {room.roomNumber}</p>
+            <h3 className="price-mono text-white text-xl font-bold">{room.nameEn}</h3>
           </div>
           <div className="text-right">
             {urgency !== 'none' && nextCheckout ? (
@@ -129,15 +122,14 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Status + urgency badge */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <UrgencyIcon className={`w-4 h-4 ${style.text}`} />
             <span className={`font-body text-sm font-semibold ${style.text}`}>
               {urgency === 'today'    ? 'Clean today!'
                : urgency === 'tomorrow' ? 'Clean tomorrow'
-               : urgency === 'soon'    ? 'Clean in ≤3 days'
-               :                         'No rush'}
+               : urgency === 'soon'     ? 'Clean in ≤3 days'
+               :                          'No rush'}
             </span>
           </div>
           <span className={`font-body text-xs font-bold px-2.5 py-1 rounded-full ${style.badge}`}>
@@ -145,7 +137,6 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
           </span>
         </div>
 
-        {/* Progress bar */}
         <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-500 ${allDone ? 'bg-green-500' : urgency === 'today' ? 'bg-red-500' : urgency === 'tomorrow' ? 'bg-amber-500' : 'bg-blue-500'}`}
@@ -153,14 +144,10 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
           />
         </div>
 
-        {/* Last cleaned */}
         {lastCleaned && (
-          <p className="font-body text-xs text-slate-500">
-            Last cleaned: {fmtTs(lastCleaned)}
-          </p>
+          <p className="font-body text-xs text-slate-500">Last cleaned: {fmtTs(lastCleaned)}</p>
         )}
 
-        {/* Expand toggle */}
         <button
           onClick={() => setExpanded((o) => !o)}
           className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 transition-colors"
@@ -169,7 +156,6 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
           {expanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
         </button>
 
-        {/* Checklist */}
         {expanded && (
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -198,7 +184,6 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
               })}
             </div>
 
-            {/* Note field */}
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <MessageSquare className="w-3 h-3 text-slate-500" />
@@ -213,7 +198,6 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
               />
             </div>
 
-            {/* Action buttons */}
             <div className="flex gap-2">
               <button
                 onClick={() => markAllDone(room.id)}
@@ -242,21 +226,27 @@ function RoomCard({ room }: { room: (typeof ROOMS)[number] }) {
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
-
 export default function CleaningPanel() {
   const today = todayStr();
   const { bookings } = useAdminStore();
+  const { overrides } = useRoomStore();
+  const allRooms = useAllRooms();
 
-  // Summary counts
-  const urgencyToday    = ROOMS.filter((r) => {
+  // Show only active rooms (original 4 always shown, placeholders only when activated)
+  const visibleRooms = allRooms.filter((r) => {
+    const o = overrides[r.id];
+    if (r.isPlaceholder) return o?.isActive === true;
+    return o?.isActive !== false;
+  });
+
+  const urgencyToday = visibleRooms.filter((r) => {
     const next = bookings
       .filter((b) => b.roomId === r.id && b.status === 'confirmed' && b.checkOut >= today)
       .sort((a, b) => a.checkOut.localeCompare(b.checkOut))[0]?.checkOut ?? null;
     return next === today;
   }).length;
 
-  const urgencyTomorrow = ROOMS.filter((r) => {
+  const urgencyTomorrow = visibleRooms.filter((r) => {
     const next = bookings
       .filter((b) => b.roomId === r.id && b.status === 'confirmed' && b.checkOut >= today)
       .sort((a, b) => a.checkOut.localeCompare(b.checkOut))[0]?.checkOut ?? null;
@@ -265,12 +255,9 @@ export default function CleaningPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Summary banner */}
       {(urgencyToday > 0 || urgencyTomorrow > 0) && (
         <div className={`rounded-2xl border px-5 py-4 flex items-center gap-3 ${
-          urgencyToday > 0
-            ? 'bg-red-900/20 border-red-700/50'
-            : 'bg-amber-900/20 border-amber-700/50'
+          urgencyToday > 0 ? 'bg-red-900/20 border-red-700/50' : 'bg-amber-900/20 border-amber-700/50'
         }`}>
           <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${urgencyToday > 0 ? 'text-red-400' : 'text-amber-400'}`} />
           <div>
@@ -295,22 +282,20 @@ export default function CleaningPanel() {
         </div>
       )}
 
-      {/* Room grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {ROOMS.map((room) => (
+        {visibleRooms.map((room) => (
           <RoomCard key={room.id} room={room} />
         ))}
       </div>
 
-      {/* Legend */}
       <div className="bg-[#111827] rounded-2xl border border-slate-700 p-4">
         <p className="price-mono text-slate-500 text-xs font-semibold uppercase tracking-wider mb-3">Legend</p>
         <div className="flex flex-wrap gap-4">
           {[
-            { color: 'bg-red-500',    label: 'Clean today — guest checks out today' },
-            { color: 'bg-amber-500',  label: 'Clean tomorrow — guest checks out tomorrow' },
-            { color: 'bg-blue-500',   label: 'Within 3 days' },
-            { color: 'bg-slate-700',  label: 'No upcoming checkout' },
+            { color: 'bg-red-500',   label: 'Clean today — guest checks out today' },
+            { color: 'bg-amber-500', label: 'Clean tomorrow — guest checks out tomorrow' },
+            { color: 'bg-blue-500',  label: 'Within 3 days' },
+            { color: 'bg-slate-700', label: 'No upcoming checkout' },
           ].map(({ color, label }) => (
             <span key={label} className="flex items-center gap-2 font-body text-xs text-slate-400">
               <span className={`w-3 h-3 rounded-full flex-shrink-0 ${color}`} />
@@ -319,7 +304,7 @@ export default function CleaningPanel() {
           ))}
         </div>
         <p className="font-body text-slate-600 text-xs mt-3">
-          ⚡ If a guest extends their stay, the checkout date updates and this reminder resets automatically.
+          ✦ If a guest extends their stay, the checkout date updates and this reminder resets automatically.
         </p>
       </div>
     </div>
