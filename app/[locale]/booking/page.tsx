@@ -184,7 +184,7 @@ export default function BookingPage() {
     });
 
     setBookingRef(ref);
-    setModalOpen(true);
+    window.location.href = `/${locale}/booking-success?ref=${ref}`;
   }
 
   const canSubmit = !!selectedRoom && !!checkIn && !!checkOut && nights > 0;
