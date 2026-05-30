@@ -6,7 +6,7 @@ import HeroSection from '@/components/HeroSection';
 import AvailabilityChecker from '@/components/AvailabilityChecker';
 import FooterPricingInfo from '@/components/FooterPricingInfo';
 import ContactInfo from '@/components/ContactInfo';
-import { rooms } from '@/lib/rooms';
+import { activeRooms } from '@/lib/rooms';
 
 const ROOM_THEMES: Record<string, { from: string; to: string; accent: string }> = {
   'green-mountain': { from: 'from-blue-900',    to: 'to-slate-900',   accent: 'text-blue-200' },
@@ -151,7 +151,7 @@ export default async function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {rooms.map((room) => {
+            {activeRooms.map((room) => {
               const theme = ROOM_THEMES[room.id] ?? ROOM_THEMES['deluxe'];
               const topAmenities = room.amenities.slice(0, 3);
               return (
