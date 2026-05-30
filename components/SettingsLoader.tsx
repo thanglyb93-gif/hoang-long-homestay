@@ -4,9 +4,13 @@ import { useSettingsStore } from '@/lib/settings-store';
 import { useImageStore } from '@/lib/image-store';
 
 export default function SettingsLoader() {
-  const loadFromDB = useSettingsStore((s) => s.loadFromDB);
+  const loadSettings = useSettingsStore((s) => s.loadFromDB);
+  const loadImages   = useImageStore((s) => s.loadFromDB);
+
   useEffect(() => {
-    loadFromDB();
+    loadSettings();
+    loadImages();
   }, []);
+
   return null;
 }
