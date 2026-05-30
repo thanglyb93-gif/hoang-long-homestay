@@ -2,18 +2,17 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { supabase } from './supabase';
 
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled';
 
 export interface AdminBooking {
-  ref: string;           // 6-digit numeric reference
+  ref: string;
   roomId: string;
   roomName: string;
   roomNumber: string;
-  checkIn: string;       // YYYY-MM-DD
-  checkOut: string;      // YYYY-MM-DD
+  checkIn: string;
+  checkOut: string;
   nights: number;
   guests: number;
   fullName: string;
@@ -23,60 +22,50 @@ export interface AdminBooking {
   requests: string;
   paymentMethod: string;
   total: number;
-  submittedAt: string;   // ISO timestamp
+  submittedAt: string;
   status: BookingStatus;
 }
 
 export interface ManualBlock {
   id: string;
-  start: string;         // YYYY-MM-DD
-  end: string;           // YYYY-MM-DD
+  start: string;
+  end: string;
   note: string;
 }
 
 export interface RoomOverride {
   roomId: string;
-  pricePerNight: number | null;        // null = use default from rooms.ts
-  amenities: string[] | null;          // null = use default from rooms.ts
+  pricePerNight: number | null;
+  amenities: string[] | null;
   manualBlocks: ManualBlock[];
 }
 
 export interface SeasonalRule {
   id: string;
   name: string;
-  startDate: string;     // YYYY-MM-DD
-  endDate: string;       // YYYY-MM-DD
-  adjustmentPct: number; // +20 = 20% surcharge, -15 = 15% discount
-  roomIds: string[];     // empty = apply to ALL rooms
+  startDate: string;
+  endDate: string;
+  adjustmentPct: number;
+  roomIds: string[];
 }
-
-// ── Store ─────────────────────────────────────────────────────────────────────
 
 interface AdminState {
   pin: string;
   isAuthenticated: boolean;
-
   bookings: AdminBooking[];
   overrides: RoomOverride[];
   seasonalRules: SeasonalRule[];
-
-  // Auth
+  loadFromDB: () => Promise<void>;
   login: (pin: string) => boolean;
   logout: () => void;
   changePin: (newPin: string) => void;
-
-  // Bookings
   addBooking: (data: Omit<AdminBooking, 'ref' | 'submittedAt' | 'status'>) => string;
   updateBookingStatus: (ref: string, status: BookingStatus) => void;
-
-  // Room overrides
   getRoomOverride: (roomId: string) => RoomOverride;
   setRoomPrice: (roomId: string, price: number | null) => void;
   setRoomAmenities: (roomId: string, amenities: string[] | null) => void;
   addManualBlock: (roomId: string, block: Omit<ManualBlock, 'id'>) => void;
   removeManualBlock: (roomId: string, blockId: string) => void;
-
-  // Seasonal pricing
   addSeasonalRule: (rule: Omit<SeasonalRule, 'id'>) => void;
   updateSeasonalRule: (id: string, updates: Partial<Omit<SeasonalRule, 'id'>>) => void;
   removeSeasonalRule: (id: string) => void;
@@ -96,23 +85,41 @@ function uid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+async function saveToDB(bookings: AdminBooking[], overrides: RoomOverride[], seasonalRules: SeasonalRule[]) {
+  await supabase.from('admin_data').upsert({
+    id: 'main',
+    bookings,
+    overrides,
+    seasonal_rules: seasonalRules,
+    updated_at: new Date().toISOString(),
+  });
+}
+
 export const useAdminStore = create<AdminState>()(
   persist(
     (set, get) => ({
       pin: DEFAULT_PIN,
       isAuthenticated: false,
-
       bookings: [],
       overrides: [],
       seasonalRules: [],
 
-      // ── Auth ──────────────────────────────────────────────────────────────
+      loadFromDB: async () => {
+        const { data, error } = await supabase
+          .from('admin_data')
+          .select('*')
+          .eq('id', 'main')
+          .single();
+        if (error || !data) return;
+        set({
+          bookings:      data.bookings       ?? [],
+          overrides:     data.overrides      ?? [],
+          seasonalRules: data.seasonal_rules ?? [],
+        });
+      },
 
       login: (pin) => {
-        if (pin === get().pin) {
-          set({ isAuthenticated: true });
-          return true;
-        }
+        if (pin === get().pin) { set({ isAuthenticated: true }); return true; }
         return false;
       },
 
@@ -120,119 +127,79 @@ export const useAdminStore = create<AdminState>()(
 
       changePin: (newPin) => set({ pin: newPin }),
 
-      // ── Bookings ──────────────────────────────────────────────────────────
-
       addBooking: (data) => {
         const ref = genRef();
-        const booking: AdminBooking = {
-          ...data,
-          ref,
-          submittedAt: new Date().toISOString(),
-          status: 'pending',
-        };
+        const booking: AdminBooking = { ...data, ref, submittedAt: new Date().toISOString(), status: 'pending' };
         set((s) => ({ bookings: [booking, ...s.bookings] }));
+        const { bookings, overrides, seasonalRules } = get();
+        saveToDB([booking, ...bookings.slice(1)], overrides, seasonalRules);
         return ref;
       },
 
-      updateBookingStatus: (ref, status) =>
-        set((s) => ({
-          bookings: s.bookings.map((b) => (b.ref === ref ? { ...b, status } : b)),
-        })),
-
-      // ── Room overrides ────────────────────────────────────────────────────
+      updateBookingStatus: (ref, status) => {
+        set((s) => ({ bookings: s.bookings.map((b) => b.ref === ref ? { ...b, status } : b) }));
+        const { bookings, overrides, seasonalRules } = get();
+        saveToDB(bookings, overrides, seasonalRules);
+      },
 
       getRoomOverride: (roomId) =>
         get().overrides.find((o) => o.roomId === roomId) ?? emptyOverride(roomId),
 
-      setRoomPrice: (roomId, price) =>
+      setRoomPrice: (roomId, price) => {
         set((s) => {
           const existing = s.overrides.find((o) => o.roomId === roomId);
-          if (existing) {
-            return {
-              overrides: s.overrides.map((o) =>
-                o.roomId === roomId ? { ...o, pricePerNight: price } : o
-              ),
-            };
-          }
           return {
-            overrides: [...s.overrides, { ...emptyOverride(roomId), pricePerNight: price }],
+            overrides: existing
+              ? s.overrides.map((o) => o.roomId === roomId ? { ...o, pricePerNight: price } : o)
+              : [...s.overrides, { ...emptyOverride(roomId), pricePerNight: price }],
           };
-        }),
+        });
+        const { bookings, overrides, seasonalRules } = get();
+        saveToDB(bookings, overrides, seasonalRules);
+      },
 
-      setRoomAmenities: (roomId, amenities) =>
+      setRoomAmenities: (roomId, amenities) => {
         set((s) => {
           const existing = s.overrides.find((o) => o.roomId === roomId);
-          if (existing) {
-            return {
-              overrides: s.overrides.map((o) =>
-                o.roomId === roomId ? { ...o, amenities } : o
-              ),
-            };
-          }
           return {
-            overrides: [...s.overrides, { ...emptyOverride(roomId), amenities }],
+            overrides: existing
+              ? s.overrides.map((o) => o.roomId === roomId ? { ...o, amenities } : o)
+              : [...s.overrides, { ...emptyOverride(roomId), amenities }],
           };
-        }),
+        });
+        const { bookings, overrides, seasonalRules } = get();
+        saveToDB(bookings, overrides, seasonalRules);
+      },
 
       addManualBlock: (roomId, block) => {
         const newBlock: ManualBlock = { ...block, id: uid() };
         set((s) => {
           const existing = s.overrides.find((o) => o.roomId === roomId);
-          if (existing) {
-            return {
-              overrides: s.overrides.map((o) =>
-                o.roomId === roomId
-                  ? { ...o, manualBlocks: [...o.manualBlocks, newBlock] }
-                  : o
-              ),
-            };
-          }
           return {
-            overrides: [
-              ...s.overrides,
-              { ...emptyOverride(roomId), manualBlocks: [newBlock] },
-            ],
+            overrides: existing
+              ? s.overrides.map((o) => o.roomId === roomId ? { ...o, manualBlocks: [...o.manualBlocks, newBlock] } : o)
+              : [...s.overrides, { ...emptyOverride(roomId), manualBlocks: [newBlock] }],
           };
         });
+        const { bookings, overrides, seasonalRules } = get();
+        saveToDB(bookings, overrides, seasonalRules);
       },
 
-      removeManualBlock: (roomId, blockId) =>
+      removeManualBlock: (roomId, blockId) => {
         set((s) => ({
           overrides: s.overrides.map((o) =>
-            o.roomId === roomId
-              ? { ...o, manualBlocks: o.manualBlocks.filter((b) => b.id !== blockId) }
-              : o
+            o.roomId === roomId ? { ...o, manualBlocks: o.manualBlocks.filter((b) => b.id !== blockId) } : o
           ),
-        })),
+        }));
+        const { bookings, overrides, seasonalRules } = get();
+        saveToDB(bookings, overrides, seasonalRules);
+      },
 
-      // ── Seasonal pricing ──────────────────────────────────────────────────
+      addSeasonalRule: (rule) => {
+        set((s) => ({ seasonalRules: [...s.seasonalRules, { ...rule, id: uid() }] }));
+        const { bookings, overrides, seasonalRules } = get();
+        saveToDB(bookings, overrides, seasonalRules);
+      },
 
-      addSeasonalRule: (rule) =>
-        set((s) => ({
-          seasonalRules: [...s.seasonalRules, { ...rule, id: uid() }],
-        })),
-
-      updateSeasonalRule: (id, updates) =>
-        set((s) => ({
-          seasonalRules: s.seasonalRules.map((r) =>
-            r.id === id ? { ...r, ...updates } : r
-          ),
-        })),
-
-      removeSeasonalRule: (id) =>
-        set((s) => ({
-          seasonalRules: s.seasonalRules.filter((r) => r.id !== id),
-        })),
-    }),
-    {
-      name: 'hoang-long-admin',
-      // Don't persist isAuthenticated — always require login on new session
-      partialize: (s) => ({
-        pin: s.pin,
-        bookings: s.bookings,
-        overrides: s.overrides,
-        seasonalRules: s.seasonalRules,
-      }),
-    }
-  )
-);
+      updateSeasonalRule: (id, updates) => {
+        set((s) => ({ seas

@@ -3,76 +3,87 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { rooms, type Room, type RoomType, type Amenity } from './rooms';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { supabase } from './supabase';
 
 export interface RoomOverride {
-  nameVi?:          string;
-  nameEn?:          string;
-  roomNumber?:      string;
-  type?:            RoomType;
-  maxGuests?:       number;
-  sizeSqm?:         number;
-  bed?:             string;
-  description?:     string;
-  amenities?:       Amenity[];
-  /** Custom price for this room (overrides pricing formula when set > 0) */
-  customPrice?:     number;
-  /** Whether this room is visible on the public website */
-  isActive?:        boolean;
+  nameVi?:       string;
+  nameEn?:       string;
+  roomNumber?:   string;
+  type?:         RoomType;
+  maxGuests?:    number;
+  sizeSqm?:      number;
+  bed?:          string;
+  description?:  string;
+  amenities?:    Amenity[];
+  customPrice?:  number;
+  isActive?:     boolean;
 }
 
 interface RoomStoreState {
   overrides: Record<string, RoomOverride>;
-  updateRoom:  (roomId: string, patch: Partial<RoomOverride>) => void;
-  resetRoom:   (roomId: string) => void;
-  activateRoom:(roomId: string) => void;
+  loadFromDB:    () => Promise<void>;
+  updateRoom:    (roomId: string, patch: Partial<RoomOverride>) => void;
+  resetRoom:     (roomId: string) => void;
+  activateRoom:  (roomId: string) => void;
   deactivateRoom:(roomId: string) => void;
 }
 
-// ── Store ─────────────────────────────────────────────────────────────────────
+async function saveToDB(overrides: Record<string, RoomOverride>) {
+  await supabase.from('room_store').upsert({
+    id: 'main',
+    overrides,
+    updated_at: new Date().toISOString(),
+  });
+}
 
 export const useRoomStore = create<RoomStoreState>()(
   persist(
     (set, get) => ({
       overrides: {},
 
-      updateRoom: (roomId, patch) =>
-        set((s) => ({
-          overrides: {
-            ...s.overrides,
-            [roomId]: { ...(s.overrides[roomId] ?? {}), ...patch },
-          },
-        })),
+      loadFromDB: async () => {
+        const { data, error } = await supabase
+          .from('room_store')
+          .select('*')
+          .eq('id', 'main')
+          .single();
+        if (error || !data) return;
+        set({ overrides: data.overrides ?? {} });
+      },
 
-      resetRoom: (roomId) =>
+      updateRoom: (roomId, patch) => {
+        set((s) => ({
+          overrides: { ...s.overrides, [roomId]: { ...(s.overrides[roomId] ?? {}), ...patch } },
+        }));
+        saveToDB(get().overrides);
+      },
+
+      resetRoom: (roomId) => {
         set((s) => {
           const next = { ...s.overrides };
           delete next[roomId];
           return { overrides: next };
-        }),
+        });
+        saveToDB(get().overrides);
+      },
 
-      activateRoom: (roomId) =>
+      activateRoom: (roomId) => {
         set((s) => ({
-          overrides: {
-            ...s.overrides,
-            [roomId]: { ...(s.overrides[roomId] ?? {}), isActive: true },
-          },
-        })),
+          overrides: { ...s.overrides, [roomId]: { ...(s.overrides[roomId] ?? {}), isActive: true } },
+        }));
+        saveToDB(get().overrides);
+      },
 
-      deactivateRoom: (roomId) =>
+      deactivateRoom: (roomId) => {
         set((s) => ({
-          overrides: {
-            ...s.overrides,
-            [roomId]: { ...(s.overrides[roomId] ?? {}), isActive: false },
-          },
-        })),
+          overrides: { ...s.overrides, [roomId]: { ...(s.overrides[roomId] ?? {}), isActive: false } },
+        }));
+        saveToDB(get().overrides);
+      },
     }),
-    { name: 'hl-rooms-v1' }
+    { name: 'hl-rooms-v2' }
   )
 );
-
-// ── Helper: merge static room with admin override ────────────────────────────
 
 export function mergeRoom(base: Room, override: RoomOverride | undefined): Room {
   if (!override) return base;
@@ -93,28 +104,18 @@ export function mergeRoom(base: Room, override: RoomOverride | undefined): Room 
   };
 }
 
-/**
- * Hook that returns all 14 rooms with admin overrides applied.
- * Placeholder rooms are included; call .filter(r => !r.isPlaceholder || override?.isActive)
- * yourself to decide what to show publicly.
- */
 export function useAllRooms(): Room[] {
   const { overrides } = useRoomStore();
   return rooms.map((r) => mergeRoom(r, overrides[r.id]));
 }
 
-/**
- * Hook that returns only rooms visible on the public site:
- * - Original 4 rooms (non-placeholder) are always included unless explicitly deactivated
- * - Placeholder rooms are included only when admin has activated them
- */
 export function usePublicRooms(): Room[] {
   const { overrides } = useRoomStore();
   return rooms
     .filter((r) => {
       const o = overrides[r.id];
       if (r.isPlaceholder) return o?.isActive === true;
-      return o?.isActive !== false; // default active for original rooms
+      return o?.isActive !== false;
     })
     .map((r) => mergeRoom(r, overrides[r.id]));
 }
