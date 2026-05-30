@@ -96,6 +96,11 @@ export default function BookingPage() {
   const [rulesAgreed,    setRulesAgreed]    = useState(false);
   const [errors,         setErrors]         = useState<FormErrors>({});
   const [modalOpen,      setModalOpen]      = useState(false);
+  
+  // Reset modal on page load
+  useEffect(() => {
+    setModalOpen(false);
+  }, []);
   const [bookingRef,     setBookingRef]     = useState('');
 
   const nights = numberOfNights();
