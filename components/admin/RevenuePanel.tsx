@@ -6,9 +6,8 @@ import {
   CheckCircle2, BarChart2, Users,
 } from 'lucide-react';
 import { useAdminStore } from '@/lib/admin-store';
+import { useAllRooms, useRoomStore } from '@/lib/room-store';
 import type { AdminBooking } from '@/lib/admin-store';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 type Period = 'today' | 'week' | 'month' | 'quarter' | 'ytd' | 'all';
 
@@ -21,28 +20,23 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: 'all',     label: 'All Time' },
 ];
 
-const ROOMS = [
-  { id: 'green-mountain', name: 'Delta', number: '101' },
-  { id: 'ban-flower',     name: 'Gamma', number: '201' },
-  { id: 'family-room',    name: 'Alpha', number: '202' },
-  { id: 'deluxe',         name: 'Beta',  number: '301' },
+const BAR_ACCENTS = [
+  'bg-slate-400', 'bg-sky-400', 'bg-violet-400', 'bg-amber-400',
+  'bg-green-400', 'bg-pink-400', 'bg-orange-400', 'bg-teal-400',
+  'bg-rose-400',  'bg-indigo-400', 'bg-yellow-400', 'bg-cyan-400',
+  'bg-lime-400',  'bg-fuchsia-400',
 ];
-
-// ── Date helpers ──────────────────────────────────────────────────────────────
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 
 function getPeriodRange(period: Period): { start: string; end: string } {
-  const now   = new Date();
+  const now = new Date();
   const today = todayStr();
-
-  if (period === 'today') {
-    return { start: today, end: today };
-  }
+  if (period === 'today')   return { start: today, end: today };
   if (period === 'week') {
-    const dow   = (now.getDay() + 6) % 7; // Mon=0
-    const mon   = new Date(now); mon.setDate(now.getDate() - dow);
-    const sun   = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const dow = (now.getDay() + 6) % 7;
+    const mon = new Date(now); mon.setDate(now.getDate() - dow);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     return { start: mon.toISOString().slice(0, 10), end: sun.toISOString().slice(0, 10) };
   }
   if (period === 'month') {
@@ -50,14 +44,11 @@ function getPeriodRange(period: Period): { start: string; end: string } {
     return { start: first.toISOString().slice(0, 10), end: today };
   }
   if (period === 'quarter') {
-    const q       = Math.floor(now.getMonth() / 3);
-    const qStart  = new Date(now.getFullYear(), q * 3, 1);
+    const q = Math.floor(now.getMonth() / 3);
+    const qStart = new Date(now.getFullYear(), q * 3, 1);
     return { start: qStart.toISOString().slice(0, 10), end: today };
   }
-  if (period === 'ytd') {
-    return { start: `${now.getFullYear()}-01-01`, end: today };
-  }
-  // all — 2020 to today
+  if (period === 'ytd') return { start: `${now.getFullYear()}-01-01`, end: today };
   return { start: '2020-01-01', end: today };
 }
 
@@ -69,9 +60,9 @@ function getPrevPeriodRange(period: Period): { start: string; end: string } {
     return { start: s, end: s };
   }
   if (period === 'week') {
-    const dow   = (now.getDay() + 6) % 7;
-    const mon   = new Date(now); mon.setDate(now.getDate() - dow - 7);
-    const sun   = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const dow = (now.getDay() + 6) % 7;
+    const mon = new Date(now); mon.setDate(now.getDate() - dow - 7);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     return { start: mon.toISOString().slice(0, 10), end: sun.toISOString().slice(0, 10) };
   }
   if (period === 'month') {
@@ -80,7 +71,7 @@ function getPrevPeriodRange(period: Period): { start: string; end: string } {
     return { start: prevStart.toISOString().slice(0, 10), end: prevEnd.toISOString().slice(0, 10) };
   }
   if (period === 'quarter') {
-    const q        = Math.floor(now.getMonth() / 3);
+    const q = Math.floor(now.getMonth() / 3);
     const prevQ    = q === 0 ? 3 : q - 1;
     const prevYear = q === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const qStart   = new Date(prevYear, prevQ * 3, 1);
@@ -94,36 +85,24 @@ function getPrevPeriodRange(period: Period): { start: string; end: string } {
   return { start: '2010-01-01', end: '2019-12-31' };
 }
 
-function filterByRange(
-  bookings: AdminBooking[],
-  start: string,
-  end: string,
-  statusFilter: 'confirmed' | 'all' = 'confirmed',
-): AdminBooking[] {
-  return bookings.filter((b) => {
-    if (statusFilter === 'confirmed' && b.status !== 'confirmed') return false;
-    return b.checkIn >= start && b.checkIn <= end;
-  });
+function filterByRange(bookings: AdminBooking[], start: string, end: string): AdminBooking[] {
+  return bookings.filter(
+    (b) => b.status === 'confirmed' && b.checkIn >= start && b.checkIn <= end
+  );
 }
 
+function fmt(n: number)  { return n.toLocaleString('en-US'); }
 function fmtDate(iso: string) {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short',
-  });
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 function fmtFull(iso: string) {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
-function fmt(n: number) { return n.toLocaleString('en-US'); }
 function fmtK(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`;
   return String(n);
 }
-
-// ── Stat Card ─────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, sub, trend, icon: Icon, accent }: {
   label: string; value: string; sub?: string;
@@ -145,19 +124,13 @@ function StatCard({ label, value, sub, trend, icon: Icon, accent }: {
         <div className={`flex items-center gap-1 mt-2 text-xs font-body font-semibold ${
           trend.pct > 0 ? 'text-green-400' : trend.pct < 0 ? 'text-red-400' : 'text-slate-500'
         }`}>
-          {trend.pct > 0
-            ? <TrendingUp className="w-3 h-3" />
-            : trend.pct < 0
-              ? <TrendingDown className="w-3 h-3" />
-              : <Minus className="w-3 h-3" />}
+          {trend.pct > 0 ? <TrendingUp className="w-3 h-3" /> : trend.pct < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
           {trend.pct > 0 ? '+' : ''}{trend.pct.toFixed(0)}% vs {trend.label}
         </div>
       )}
     </div>
   );
 }
-
-// ── Room Revenue Bar ──────────────────────────────────────────────────────────
 
 function RoomBar({ name, number, revenue, bookingCount, maxRevenue, accent }: {
   name: string; number: string; revenue: number; bookingCount: number;
@@ -180,29 +153,25 @@ function RoomBar({ name, number, revenue, bookingCount, maxRevenue, accent }: {
   );
 }
 
-const ROOM_ACCENTS = [
-  'bg-slate-400',
-  'bg-sky-400',
-  'bg-violet-400',
-  'bg-amber-400',
-];
-
-// ── Main ──────────────────────────────────────────────────────────────────────
-
 export default function RevenuePanel() {
   const { bookings } = useAdminStore();
+  const { overrides: roomOverrides } = useRoomStore();
+  const allRooms = useAllRooms();
   const [period, setPeriod] = useState<Period>('month');
 
-  const { start, end } = getPeriodRange(period);
+  // Only show rooms that are active (original 4 always, placeholders only when activated)
+  const visibleRooms = allRooms.filter((r) => {
+    const o = roomOverrides[r.id];
+    if (r.isPlaceholder) return o?.isActive === true;
+    return o?.isActive !== false;
+  });
+
+  const { start, end }             = getPeriodRange(period);
   const { start: prevStart, end: prevEnd } = getPrevPeriodRange(period);
 
-  const currentBookings = useMemo(() =>
-    filterByRange(bookings, start, end), [bookings, start, end]);
+  const currentBookings = useMemo(() => filterByRange(bookings, start, end),         [bookings, start, end]);
+  const prevBookings    = useMemo(() => filterByRange(bookings, prevStart, prevEnd),  [bookings, prevStart, prevEnd]);
 
-  const prevBookings = useMemo(() =>
-    filterByRange(bookings, prevStart, prevEnd), [bookings, prevStart, prevEnd]);
-
-  // Core stats
   const totalRevenue  = currentBookings.reduce((sum, b) => sum + b.total, 0);
   const prevRevenue   = prevBookings.reduce((sum, b) => sum + b.total, 0);
   const revTrendPct   = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : 0;
@@ -211,21 +180,22 @@ export default function RevenuePanel() {
   const prevCount     = prevBookings.length;
   const countTrendPct = prevCount > 0 ? ((bookingCount - prevCount) / prevCount) * 100 : 0;
 
-  const avgRevenue    = bookingCount > 0 ? Math.round(totalRevenue / bookingCount) : 0;
-  const totalNights   = currentBookings.reduce((sum, b) => sum + b.nights, 0);
+  const avgRevenue  = bookingCount > 0 ? Math.round(totalRevenue / bookingCount) : 0;
+  const totalNights = currentBookings.reduce((sum, b) => sum + b.nights, 0);
 
-  // Room breakdown
-  const roomBreakdown = ROOMS.map((room) => {
+  // Room breakdown — only active rooms
+  const roomBreakdown = visibleRooms.map((room) => {
     const rb = currentBookings.filter((b) => b.roomId === room.id);
     return {
-      ...room,
+      id:           room.id,
+      name:         room.nameEn,
+      number:       room.roomNumber,
       revenue:      rb.reduce((s, b) => s + b.total, 0),
       bookingCount: rb.length,
     };
   });
   const maxRevenue = Math.max(...roomBreakdown.map((r) => r.revenue), 1);
 
-  // Payment method breakdown
   const paymentBreakdown = ['bank', 'momo', 'card', 'cash'].map((method) => {
     const mb = currentBookings.filter((b) => b.paymentMethod === method);
     return {
@@ -258,12 +228,11 @@ export default function RevenuePanel() {
         ))}
       </div>
 
-      {/* Period label */}
       {period !== 'all' && (
         <p className="font-body text-slate-500 text-sm">
           Revenue attributed by guest check-in date ·{' '}
           <span className="text-slate-400 font-semibold">
-            {fmtFull(start)}{start !== end ? ` – ${fmtFull(end)}` : ''}
+            {fmtFull(start)}{start !== end ? ` → ${fmtFull(end)}` : ''}
           </span>
         </p>
       )}
@@ -320,7 +289,7 @@ export default function RevenuePanel() {
                 revenue={room.revenue}
                 bookingCount={room.bookingCount}
                 maxRevenue={maxRevenue}
-                accent={ROOM_ACCENTS[i]}
+                accent={BAR_ACCENTS[i % BAR_ACCENTS.length]}
               />
             ))}
           </div>
@@ -337,9 +306,7 @@ export default function RevenuePanel() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {paymentBreakdown.map((m) => (
               <div key={m.method} className="bg-[#0b1120] rounded-xl border border-slate-700 p-3 text-center">
-                <p className="font-body text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">
-                  {m.label}
-                </p>
+                <p className="font-body text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">{m.label}</p>
                 <p className="price-mono text-white font-bold text-sm">{m.count} booking{m.count !== 1 ? 's' : ''}</p>
                 <p className="price-mono text-slate-400 text-xs mt-0.5">₫{fmtK(m.total)}</p>
               </div>
@@ -352,9 +319,7 @@ export default function RevenuePanel() {
       <div className="bg-[#111827] rounded-2xl border border-slate-700 overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-800">
           <CheckCircle2 className="w-4 h-4 text-green-400" />
-          <h3 className="price-mono text-white font-semibold text-sm flex-1">
-            Bookings in Period
-          </h3>
+          <h3 className="price-mono text-white font-semibold text-sm flex-1">Bookings in Period</h3>
           <span className="font-body text-xs text-slate-500">{currentBookings.length}</span>
         </div>
 
