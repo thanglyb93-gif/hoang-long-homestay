@@ -102,11 +102,15 @@ export default function BookingConfirmModal({
         <div className="p-7 sm:p-8">
           {/* Header */}
           <div className="flex flex-col items-center text-center mb-7">
-            <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-8 h-8 text-blue-500" />
+            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-5">
+              <CheckCircle2 className="w-12 h-12 text-green-500" />
             </div>
-            <h2 className="font-heading text-3xl font-semibold text-forest-900 mb-1">{t('title')}</h2>
-            <p className="font-body text-forest-500 text-sm">{t('subtitle')}</p>
+            <h2 className="font-heading text-2xl font-semibold text-forest-900 mb-2">
+              You've successfully booked a room at Hoang Long Homestay!
+            </h2>
+            <p className="font-body text-forest-500 text-sm">
+              Please keep your reference number below. We will contact you to confirm your booking.
+            </p>
           </div>
 
           {/* Reference box */}
