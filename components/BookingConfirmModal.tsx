@@ -51,8 +51,15 @@ export default function BookingConfirmModal({
   useEffect(() => {
     if (!isOpen) return;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -77,7 +84,7 @@ export default function BookingConfirmModal({
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-forest-900/80 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-forest-900/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Panel */}
       <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
