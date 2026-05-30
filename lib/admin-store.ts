@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -131,15 +131,15 @@ export const useAdminStore = create<AdminState>()(
         const ref = genRef();
         const booking: AdminBooking = { ...data, ref, submittedAt: new Date().toISOString(), status: 'pending' };
         set((s) => ({ bookings: [booking, ...s.bookings] }));
-        const { bookings, overrides, seasonalRules } = get();
-        saveToDB([booking, ...bookings.slice(1)], overrides, seasonalRules);
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
         return ref;
       },
 
       updateBookingStatus: (ref, status) => {
         set((s) => ({ bookings: s.bookings.map((b) => b.ref === ref ? { ...b, status } : b) }));
-        const { bookings, overrides, seasonalRules } = get();
-        saveToDB(bookings, overrides, seasonalRules);
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
       },
 
       getRoomOverride: (roomId) =>
@@ -154,8 +154,8 @@ export const useAdminStore = create<AdminState>()(
               : [...s.overrides, { ...emptyOverride(roomId), pricePerNight: price }],
           };
         });
-        const { bookings, overrides, seasonalRules } = get();
-        saveToDB(bookings, overrides, seasonalRules);
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
       },
 
       setRoomAmenities: (roomId, amenities) => {
@@ -167,8 +167,8 @@ export const useAdminStore = create<AdminState>()(
               : [...s.overrides, { ...emptyOverride(roomId), amenities }],
           };
         });
-        const { bookings, overrides, seasonalRules } = get();
-        saveToDB(bookings, overrides, seasonalRules);
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
       },
 
       addManualBlock: (roomId, block) => {
@@ -181,8 +181,8 @@ export const useAdminStore = create<AdminState>()(
               : [...s.overrides, { ...emptyOverride(roomId), manualBlocks: [newBlock] }],
           };
         });
-        const { bookings, overrides, seasonalRules } = get();
-        saveToDB(bookings, overrides, seasonalRules);
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
       },
 
       removeManualBlock: (roomId, blockId) => {
@@ -191,15 +191,36 @@ export const useAdminStore = create<AdminState>()(
             o.roomId === roomId ? { ...o, manualBlocks: o.manualBlocks.filter((b) => b.id !== blockId) } : o
           ),
         }));
-        const { bookings, overrides, seasonalRules } = get();
-        saveToDB(bookings, overrides, seasonalRules);
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
       },
 
       addSeasonalRule: (rule) => {
         set((s) => ({ seasonalRules: [...s.seasonalRules, { ...rule, id: uid() }] }));
-        const { bookings, overrides, seasonalRules } = get();
-        saveToDB(bookings, overrides, seasonalRules);
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
       },
 
       updateSeasonalRule: (id, updates) => {
-        set((s) => ({ seas
+        set((s) => ({ seasonalRules: s.seasonalRules.map((r) => r.id === id ? { ...r, ...updates } : r) }));
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+      },
+
+      removeSeasonalRule: (id) => {
+        set((s) => ({ seasonalRules: s.seasonalRules.filter((r) => r.id !== id) }));
+        const s = get();
+        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+      },
+    }),
+    {
+      name: 'hoang-long-admin-v2',
+      partialize: (s) => ({
+        pin: s.pin,
+        bookings: s.bookings,
+        overrides: s.overrides,
+        seasonalRules: s.seasonalRules,
+      }),
+    }
+  )
+);
