@@ -178,13 +178,7 @@ export default async function HomePage() {
                         #{room.roomNumber}
                       </span>
                     </div>
-                    {/* Price ribbon */}
-                    <div className="absolute top-4 right-4 text-right">
-                      <span className={`font-heading text-2xl font-semibold ${theme.accent}`}>
-                        {(room.pricePerNight / 1000).toFixed(0)}k
-                      </span>
-                      <span className="font-body text-white/60 text-xs block">đ{t('rooms.per_night')}</span>
-                    </div>
+                    
                   </div>
 
                   {/* Card body */}
