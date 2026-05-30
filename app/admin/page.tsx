@@ -118,6 +118,9 @@ export default function AdminHubPage() {
         >
           <LogOut className="w-3.5 h-3.5" /> Logout
         </button>
+        <a href="/en" className="flex items-center gap-1.5 font-body text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+          🏠 Home
+        </a>
       </header>
 
       {/* ── Tab nav ─────────────────────────────────────────────────────────── */}
