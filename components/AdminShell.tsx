@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import {
@@ -21,7 +21,11 @@ const NAV_ITEMS = [
 ];
 
 export default function AdminShell({ children }: Props) {
-  const { isAuthenticated, login, logout } = useAdminStore();
+   const { isAuthenticated, login, logout, loadFromDB } = useAdminStore();
+
+  useEffect(() => {
+    loadFromDB();
+  }, []);
   const params   = useParams();
   const pathname = usePathname();
   const locale   = params.locale as string;
