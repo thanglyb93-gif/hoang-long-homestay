@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Lock, Eye, EyeOff, LogOut,
   LayoutDashboard, DollarSign, ImageIcon, BedDouble, CalendarDays,
@@ -36,11 +36,15 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AdminHubPage() {
-  const { isAuthenticated, login, logout } = useAdminStore();
+  const { isAuthenticated, login, logout, loadFromDB } = useAdminStore();
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [showPin,  setShowPin]  = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+
+  useEffect(() => {
+    loadFromDB();
+  }, []);
 
   // ── Login ────────────────────────────────────────────────────────────────────
   function handleLogin(e: React.FormEvent) {

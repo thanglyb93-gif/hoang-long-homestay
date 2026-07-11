@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from './supabase';
+import * as bookingsDB from './bookings-db';
 
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled';
 
@@ -59,8 +60,8 @@ interface AdminState {
   login: (pin: string) => boolean;
   logout: () => void;
   changePin: (newPin: string) => void;
-  addBooking: (data: Omit<AdminBooking, 'ref' | 'submittedAt' | 'status'>) => string;
-  updateBookingStatus: (ref: string, status: BookingStatus) => void;
+  addBooking: (data: Omit<AdminBooking, 'ref' | 'submittedAt' | 'status'>) => Promise<string>;
+  updateBookingStatus: (ref: string, status: BookingStatus) => Promise<void>;
   getRoomOverride: (roomId: string) => RoomOverride;
   setRoomPrice: (roomId: string, price: number | null) => void;
   setRoomAmenities: (roomId: string, amenities: string[] | null) => void;
@@ -77,23 +78,22 @@ function emptyOverride(roomId: string): RoomOverride {
   return { roomId, pricePerNight: null, amenities: null, manualBlocks: [] };
 }
 
-function genRef(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-async function saveToDB(bookings: AdminBooking[], overrides: RoomOverride[], seasonalRules: SeasonalRule[]) {
+async function saveToDB(overrides: RoomOverride[], seasonalRules: SeasonalRule[]) {
   await supabase.from('admin_data').upsert({
     id: 'main',
-    bookings,
     overrides,
     seasonal_rules: seasonalRules,
     updated_at: new Date().toISOString(),
   });
 }
+
+// Realtime subscription is process-wide — guard against setting it up more than once
+// (multiple admin shells / hot reloads all call loadFromDB()).
+let bookingsChannelActive = false;
 
 export const useAdminStore = create<AdminState>()(
   persist(
@@ -110,12 +110,33 @@ export const useAdminStore = create<AdminState>()(
           .select('*')
           .eq('id', 'main')
           .single();
-        if (error || !data) return;
-        set({
-          bookings:      data.bookings       ?? [],
-          overrides:     data.overrides      ?? [],
-          seasonalRules: data.seasonal_rules ?? [],
-        });
+        if (!error && data) {
+          set({
+            overrides:     data.overrides      ?? [],
+            seasonalRules: data.seasonal_rules ?? [],
+          });
+        }
+
+        try {
+          const bookings = await bookingsDB.getAllBookings();
+          set({ bookings });
+        } catch {
+          // network hiccup — keep whatever was already in state
+        }
+
+        if (!bookingsChannelActive) {
+          bookingsChannelActive = true;
+          bookingsDB.subscribeToBookings((booking) => {
+            set((s) => {
+              const exists = s.bookings.some((b) => b.ref === booking.ref);
+              return {
+                bookings: exists
+                  ? s.bookings.map((b) => b.ref === booking.ref ? booking : b)
+                  : [booking, ...s.bookings],
+              };
+            });
+          });
+        }
       },
 
       login: (pin) => {
@@ -127,19 +148,15 @@ export const useAdminStore = create<AdminState>()(
 
       changePin: (newPin) => set({ pin: newPin }),
 
-      addBooking: (data) => {
-        const ref = genRef();
-        const booking: AdminBooking = { ...data, ref, submittedAt: new Date().toISOString(), status: 'pending' };
+      addBooking: async (data) => {
+        const booking = await bookingsDB.createBooking(data);
         set((s) => ({ bookings: [booking, ...s.bookings] }));
-        const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
-        return ref;
+        return booking.ref;
       },
 
-      updateBookingStatus: (ref, status) => {
+      updateBookingStatus: async (ref, status) => {
         set((s) => ({ bookings: s.bookings.map((b) => b.ref === ref ? { ...b, status } : b) }));
-        const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+        await bookingsDB.updateBookingStatus(ref, status);
       },
 
       getRoomOverride: (roomId) =>
@@ -155,7 +172,7 @@ export const useAdminStore = create<AdminState>()(
           };
         });
         const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+        saveToDB(s.overrides, s.seasonalRules);
       },
 
       setRoomAmenities: (roomId, amenities) => {
@@ -168,7 +185,7 @@ export const useAdminStore = create<AdminState>()(
           };
         });
         const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+        saveToDB(s.overrides, s.seasonalRules);
       },
 
       addManualBlock: (roomId, block) => {
@@ -182,7 +199,7 @@ export const useAdminStore = create<AdminState>()(
           };
         });
         const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+        saveToDB(s.overrides, s.seasonalRules);
       },
 
       removeManualBlock: (roomId, blockId) => {
@@ -192,32 +209,31 @@ export const useAdminStore = create<AdminState>()(
           ),
         }));
         const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+        saveToDB(s.overrides, s.seasonalRules);
       },
 
       addSeasonalRule: (rule) => {
         set((s) => ({ seasonalRules: [...s.seasonalRules, { ...rule, id: uid() }] }));
         const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+        saveToDB(s.overrides, s.seasonalRules);
       },
 
       updateSeasonalRule: (id, updates) => {
         set((s) => ({ seasonalRules: s.seasonalRules.map((r) => r.id === id ? { ...r, ...updates } : r) }));
         const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+        saveToDB(s.overrides, s.seasonalRules);
       },
 
       removeSeasonalRule: (id) => {
         set((s) => ({ seasonalRules: s.seasonalRules.filter((r) => r.id !== id) }));
         const s = get();
-        saveToDB(s.bookings, s.overrides, s.seasonalRules);
+        saveToDB(s.overrides, s.seasonalRules);
       },
     }),
     {
       name: 'hoang-long-admin-v2',
       partialize: (s) => ({
         pin: s.pin,
-        bookings: s.bookings,
         overrides: s.overrides,
         seasonalRules: s.seasonalRules,
       }),

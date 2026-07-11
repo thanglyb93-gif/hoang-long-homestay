@@ -96,7 +96,8 @@ export default function BookingPage() {
   const [rulesAgreed,    setRulesAgreed]    = useState(false);
   const [errors,         setErrors]         = useState<FormErrors>({});
   const [modalOpen,      setModalOpen]      = useState(false);
-  
+  const [submitting,     setSubmitting]     = useState(false);
+
   // Reset modal on page load
   useEffect(() => {
     setModalOpen(false);
@@ -158,36 +159,43 @@ export default function BookingPage() {
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedRoom || !checkIn || !checkOut) return;
     if (!validate()) return;
+    if (submitting) return;
 
     const toYMD = (d: Date) => d.toISOString().slice(0, 10);
 
-    // Record in admin store — generates & returns the 6-digit ref
-    const ref = addBooking({
-      roomId:        selectedRoom.id,
-      roomName:      selectedRoom.nameEn,
-      roomNumber:    selectedRoom.roomNumber,
-      checkIn:       toYMD(checkIn),
-      checkOut:      toYMD(checkOut),
-      nights,
-      guests,
-      fullName,
-      phone,
-      email,
-      nationality,
-      requests,
-      paymentMethod,
-      total,
-    });
+    setSubmitting(true);
+    try {
+      // Saves to Supabase — generates & returns the 6-digit ref
+      const ref = await addBooking({
+        roomId:        selectedRoom.id,
+        roomName:      selectedRoom.nameEn,
+        roomNumber:    selectedRoom.roomNumber,
+        checkIn:       toYMD(checkIn),
+        checkOut:      toYMD(checkOut),
+        nights,
+        guests,
+        fullName,
+        phone,
+        email,
+        nationality,
+        requests,
+        paymentMethod,
+        total,
+      });
 
-    setBookingRef(ref);
-    window.location.href = `/${locale}/booking-success?ref=${ref}`;
+      setBookingRef(ref);
+      window.location.href = `/${locale}/booking-success?ref=${ref}`;
+    } catch {
+      setSubmitting(false);
+      alert('Something went wrong submitting your booking. Please try again.');
+    }
   }
 
-  const canSubmit = !!selectedRoom && !!checkIn && !!checkOut && nights > 0;
+  const canSubmit = !!selectedRoom && !!checkIn && !!checkOut && nights > 0 && !submitting;
 
   return (
     <>
